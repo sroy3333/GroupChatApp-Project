@@ -59,5 +59,5 @@ sequelize
     await Message.sync();
     app.listen(7000);
 }).catch(err => {
-     console.log(err);
+    console.log(err);
 });
