@@ -52,9 +52,12 @@ GroupMember.associate(models);
 
 sequelize
 .sync({force: true})
-.then(() => {
-app.listen(7000);
-})
-.catch(err => {
-console.log(err);
+.then(async () => {
+    await User.sync();
+    await Group.sync();
+    await GroupMember.sync();
+    await Message.sync();
+    app.listen(7000);
+}).catch(err => {
+     console.log(err);
 });
