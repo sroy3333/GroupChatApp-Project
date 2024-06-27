@@ -14,7 +14,7 @@ const Message = sequelize.define('Message', {
     type: Sequelize.INTEGER,
     allowNull: false,
     references: {
-      model: 'User',
+      model: 'Users',
       key: 'id'
     }
   },
