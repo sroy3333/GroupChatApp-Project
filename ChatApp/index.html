@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Chat App</title>
+    <link rel="stylesheet" href="/css/chatapp.css">
+</head>
+<body>
+    <div id="app">
+        <div id="chat-container">
+            <h1>Welcome <span id="user-name"></span></h1>
+            <div id="group-list">
+                <h3>Groups</h3>
+                <ul id="groups"></ul>
+                <input type="text" id="group-name" placeholder="Group Name">
+                <button id="create-group-btn">Create Group</button>
+            </div>
+            <button id="back-to-main-btn" style="display: none;">Back to Main</button> <!-- Back button -->
+            <div id="group-details" style="display: none;">
+                <h3>Group Details</h3>
+                <div id="invite-member">
+                    <input type="email" id="invite-email" placeholder="Invite member by email">
+                    <button id="invite-member-btn">Invite Member</button>
+                </div>
+                <div id="group-members">
+                    <h4>Members</h4>
+                    <ul id="members"></ul>
+                    <button id="promote-member-btn" style="display: none;">Promote to Admin</button>
+                </div><br><br>
+                <div id="chat-box">
+                    <h4>Group Chat</h4>
+                    <ul id="messages"></ul>
+                    <input type="text" id="message-content" placeholder="Message">
+                    <button id="send-message-btn">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatContainer = document.getElementById('chat-container');
+            const userNameSpan = document.getElementById('user-name');
+            const groupsList = document.getElementById('groups');
+            const membersList = document.getElementById('members');
+            const messagesList = document.getElementById('messages');
+            const createGroupBtn = document.getElementById('create-group-btn');
+            const sendMessageBtn = document.getElementById('send-message-btn');
+            const inviteMemberBtn = document.getElementById('invite-member-btn');
+            const groupDetails = document.getElementById('group-details');
+            const groupListSection = document.getElementById('group-list');
+            const promoteMemberBtn = document.getElementById('promote-member-btn');
+            const backToMainBtn = document.getElementById('back-to-main-btn'); // Back button
+
+            const token = localStorage.getItem('token');
+            let selectedGroup = null;
+
+            if (token) {
+                initializeChat();
+            } else {
+                alert('You need to be logged in to access the chat.');
+            }
+
+            createGroupBtn.addEventListener('click', async () => {
+                const groupName = document.getElementById('group-name').value;
+
+                try {
+                    const res = await axios.post('http://localhost:7000/groups/create', { name: groupName }, {
+                        headers: {
+                            Authorization: token
+                        }
+                    });
+                    const group = res.data;
+                    addGroupToList(group);
+                    document.getElementById('group-name').value = ''; // Clear the input field
+                } catch (error) {
+                    console.error('Error creating group:', error);
+                }
+            });
+
+            sendMessageBtn.addEventListener('click', async () => {
+                const content = document.getElementById('message-content').value;
+
+                if (!selectedGroup) return;
+
+                try {
+                    const res = await axios.post('http://localhost:7000/messages/send', { groupId: selectedGroup, content }, {
+                        headers: {
+                            Authorization: token
+                        }
+                    });
+                    const message = res.data;
+                    addMessageToList(message);
+                    document.getElementById('message-content').value = ''; // Clear the input field
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                }
+            });
+
+            inviteMemberBtn.addEventListener('click', async () => {
+                const email = document.getElementById('invite-email').value;
+
+                if (!selectedGroup) return;
+
+                try {
+                    const res = await axios.post('http://localhost:7000/groupMembers/invite', { groupId: selectedGroup, email }, {
+                        headers: {
+                            Authorization: token
+                        }
+                    });
+                    const member = res.data.member;
+                    const userDetails = res.data.userDetails;
+                    addMemberToList(userDetails);
+                    document.getElementById('invite-email').value = ''; // Clear the input field
+                } catch (error) {
+                    console.error('Error inviting member:', error);
+                }
+            });
+
+            
+            backToMainBtn.addEventListener('click', () => {
+                groupDetails.style.display = 'none';
+                groupListSection.style.display = 'block';
+                backToMainBtn.style.display = 'none'; // Hide the back button
+                selectedGroup = null; // Reset selected group
+            });
+
+            async function initializeChat() {
+                const user = parseJwt(token);
+                userNameSpan.textContent = user.name;
+
+                try {
+                    const res = await axios.get('http://localhost:7000/groups', {
+                        headers: {
+                            Authorization: token
+                        }
+                    });
+                    const groups = res.data;
+                    groups.forEach(groupMember => addGroupToList(groupMember.group));
+                } catch (error) {
+                    console.error('Error fetching groups:', error);
+                }
+            }
+
+            function addGroupToList(group) {
+                const li = document.createElement('li');
+                li.textContent = group.name;
+                li.addEventListener('click', () => {
+                    selectedGroup = group.id;
+                    fetchGroupDetails();
+                });
+                groupsList.appendChild(li);
+            }
+
+            async function fetchGroupDetails() {
+                if (!selectedGroup) return;
+
+                try {
+                    const res = await axios.get(`http://localhost:7000/groups/${selectedGroup}`, {
+                        headers: {
+                            Authorization: token
+                        }
+                    });
+                    const group = res.data;
+                    groupDetails.style.display = 'block';
+                    groupListSection.style.display = 'none';
+                    membersList.innerHTML = '';
+                    messagesList.innerHTML = '';
+
+                    // Add group members to the list
+                    group.members.forEach(member => {
+                        addMemberToList(member.user, member.isAdmin);
+                    });
+
+                    // Show or hide promoteMemberBtn based on admin status of current user
+                    if (group.isAdmin) {
+                        promoteMemberBtn.style.display = 'block';
+                    } else {
+                        promoteMemberBtn.style.display = 'none';
+                    }
+
+                    backToMainBtn.style.display = 'block'; // Show the back button
+                } catch (error) {
+                    console.error('Error fetching group details:', error);
+                }
+            }
+
+            function addMemberToList(member, isAdmin) {
+                const li = document.createElement('li');
+                li.textContent = `${member.name} (${member.email})`;
+
+                if (isAdmin) {
+                    li.innerHTML += ' - Admin';
+                    li.setAttribute('data-admin', 'true'); // Mark this li as admin
+                } else {
+                    // Show the promote button for non-admin members
+                    promoteMemberBtn.style.display = 'block';
+                    promoteMemberBtn.onclick = async () => {
+                        try {
+                            const res = await axios.post('http://localhost:7000/groupMembers/promote', {
+                                groupId: selectedGroup,
+                                memberId: member.id
+                            }, {
+                                headers: {
+                                    Authorization: token
+                                }
+                            });
+
+                            if (res.status === 200) {
+                                alert('Member promoted to admin successfully');
+                                promoteMemberBtn.style.display = 'none'; // Hide the button after promoting
+                                li.innerHTML = `${member.name} (${member.email}) - Admin`; // Update innerHTML
+                                li.setAttribute('data-admin', 'true'); // Update the li to mark as admin
+                            } else {
+                                throw new Error('Failed to promote member');
+                            }
+                        } catch (error) {
+                            console.error('Error promoting member:', error);
+                        }
+                    };
+                }
+                li.innerHTML += ` <button class="remove-member-btn" data-user-id="${member.id}">Remove Member</button>`;
+                membersList.appendChild(li);
+            }
+
+            membersList.addEventListener('click', async (event) => {
+                if (event.target.classList.contains('remove-member-btn')) {
+                    const userId = event.target.dataset.userId;
+                    if (!selectedGroup || !userId) return;
+
+                    try {
+                        await axios.post('http://localhost:7000/groupMembers/remove', { groupId: selectedGroup, userId }, {
+                            headers: {
+                                Authorization: token
+                            }
+                        });
+                        event.target.parentElement.remove(); // Remove the member from the list
+                        const isAdmin = event.target.parentElement.getAttribute('data-admin') === 'true';
+                        if (isAdmin) {
+                            promoteMemberBtn.style.display = 'none';
+                        }
+                    } catch (error) {
+                        console.error('Error removing member:', error);
+                    }
+                }
+            });
+
+            function addMessageToList(message) {
+                const li = document.createElement('li');
+                li.textContent = message.content;
+                messagesList.appendChild(li);
+            }
+
+            function parseJwt(token) {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map((c) => {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+
+                return JSON.parse(jsonPayload);
+            }
+        });
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.7.2/axios.min.js" integrity="sha512-JSCFHhKDilTRRXe9ak/FJ28dcpOJxzQaCd3Xg8MyF6XFjODhy/YMCM8HW0TFDckNHWUewW+kfvhin43hKtJxAw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</body>
+</html>
