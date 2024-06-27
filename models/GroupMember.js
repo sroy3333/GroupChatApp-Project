@@ -15,7 +15,7 @@ const GroupMember = sequelize.define('GroupMember', {
     type: Sequelize.INTEGER,
     allowNull: false,
     references: {
-      model: 'Users',
+      model: 'User',
       key: 'id'
     }
   },
